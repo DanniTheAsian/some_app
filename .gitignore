@@ -1,0 +1,48 @@
+############################
+# 🔒 ENV & SECRETS
+############################
+.env
+.env.*
+*.env
+
+############################
+# 🐍 PYTHON (BACKEND)
+############################
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+ENV/
+env/
+.pytest_cache/
+.mypy_cache/
+
+############################
+# 🟢 NODE / NUXT (FRONTEND)
+############################
+node_modules/
+.nuxt/
+.output/
+dist/
+.cache/
+coverage/
+
+############################
+# 🔧 LOGS
+############################
+*.log
+
+############################
+# 🧠 IDE / OS
+############################
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
