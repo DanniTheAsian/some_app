@@ -1,4 +1,4 @@
-from backend.user import User
+from backend.model.user import User
 
 u = User()
 print("Testing user lookup...")

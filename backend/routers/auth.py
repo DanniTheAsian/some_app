@@ -1,37 +1,23 @@
-from fastapi import FastAPI, HTTPException, Response, Cookie
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import APIRouter, HTTPException, Response, Cookie
 from pydantic import BaseModel
 from jose import jwt, JWTError
 from datetime import datetime, timedelta
-import os
-from ..user import User
+from models.user import UserRepository
 from pathlib import Path
 from dotenv import load_dotenv
 import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 env_path = BASE_DIR / ".env"
-
-print("Loading ENV from:", env_path)
-
 load_dotenv(env_path)
 
-app = FastAPI()
+router = APIRouter(tags=["Auth"])
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"], 
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
-)
-
-user_model = User()
+user_model = UserRepository()
 
 SECRET_KEY = os.getenv("SECRETKEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRES_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRES_MINUTES", 60))
-
 
 
 def create_access_token(data: dict):
@@ -54,25 +40,27 @@ class RegisterData(BaseModel):
     password: str
 
 
-@app.post("/login")
+@router.post("/login")
 def login(data: LoginData, response: Response):
-    if user_model.verify_password(data.email, data.password):
-        access_token = create_access_token(data={"sub": data.email})
+    user = user_model.get_by_email(data.email)
+
+    if user and user_model.verify_password(user, data.password):
+        access_token = create_access_token(data={"sub": str(user.id)})
 
         response.set_cookie(
             key="access_token",
             value=access_token,
             httponly=True,
-            samesite="lax",   
-            secure=False    
+            samesite="lax",
+            secure=False,
+            path= "/"
         )
+        return {"message": "Login success"}
 
-        return {"message": "Login succes"}
-
-    raise HTTPException(status_code=401, detail="wrong credentials")
+    raise HTTPException(status_code=401, detail="Wrong credentials")
 
 
-@app.post("/register")
+@router.post("/register")
 def register(data: RegisterData):
     user = user_model.create_user(
         data.username,
@@ -82,25 +70,47 @@ def register(data: RegisterData):
         data.password
     )
     if user:
-        return {"message": "user created"}
-    raise HTTPException(status_code=400, detail="user exists or error")
+        return {"message": "User created"}
+    raise HTTPException(status_code=400)
 
 
-@app.get("/me")
+@router.get("/me")
 def read_users_me(access_token: str = Cookie(None)):
     if not access_token:
-        raise HTTPException(status_code=401, detail="Not logged in")
+        raise HTTPException(status_code=401)
 
     try:
         payload = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM])
-        email = payload.get("sub")
-        return {"email": email}
+        user_id = payload.get("sub")
+        user = user_model.get_by_id(user_id)
+
+        return {
+            "id": user.id,
+            "email": user.email,
+            "username": user.username
+        }
 
     except JWTError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise HTTPException(status_code=401)
 
 
-@app.post("/logout")
+@router.post("/logout")
 def logout(response: Response):
     response.delete_cookie("access_token")
-    return {"message": "logged out"}
+    return {"message": "Logged out"}
+
+
+def get_current_user(access_token: str = Cookie(None)):
+    if not access_token:
+        raise HTTPException(status_code=401)
+
+    try:
+        payload = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        user = user_model.get_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=401)
+        return user
+
+    except JWTError:
+        raise HTTPException(status_code=401)
