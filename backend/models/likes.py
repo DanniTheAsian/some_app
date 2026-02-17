@@ -18,18 +18,21 @@ class LikesRepo:
             """
             INSERT INTO post_likes (user_id, post_id)
             VALUES (%s, %s)
-            ON CONFLICT DO NOTHING
+            ON CONFLICT (user_id, post_id)
+            DO UPDATE SET created_at = NOW()
             RETURNING user_id, post_id, created_at
-            """, 
+            """,
             (user_id, post_id)
         )
 
         row = cur.fetchone()
         conn.commit()
+
         cur.close()
         conn.close()
 
-        return PostLike(*row) if row else None
+        return PostLike(*row)
+
     
     def unlike_post(self, user_id, post_id:int):
         conn = get_connection()

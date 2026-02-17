@@ -21,6 +21,8 @@ ACCESS_TOKEN_EXPIRES_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRES_MINUTES", 60)
 
 
 def create_access_token(data: dict):
+    if not SECRET_KEY:
+        raise ValueError("SECRETKEY environment variable is not set")
     to_encode = data.copy()
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRES_MINUTES)
     to_encode.update({"exp": expire})
@@ -28,7 +30,8 @@ def create_access_token(data: dict):
 
 
 class LoginData(BaseModel):
-    email: str
+    identifier: str | None = None
+    email: str | None = None
     password: str
 
 
@@ -42,7 +45,16 @@ class RegisterData(BaseModel):
 
 @router.post("/login")
 def login(data: LoginData, response: Response):
-    user = user_model.get_by_email(data.email)
+
+    ident = data.identifier or data.email
+
+    if not ident:
+        raise HTTPException(status_code=400, detail="Missing login field")
+
+    user = user_model.get_by_email(ident)
+
+    if not user:
+        user = user_model.get_by_username(ident)
 
     if user and user_model.verify_password(user, data.password):
         access_token = create_access_token(data={"sub": str(user.id)})
@@ -51,14 +63,16 @@ def login(data: LoginData, response: Response):
             key="access_token",
             value=access_token,
             httponly=True,
-            samesite="lax",
-            secure=False,
-            path= "/"
+            secure=True,
+            samesite="none",
+            path="/",
+            max_age=60*60*24*7
         )
+
+
         return {"message": "Login success"}
 
     raise HTTPException(status_code=401, detail="Wrong credentials")
-
 
 @router.post("/register")
 def register(data: RegisterData):
@@ -96,8 +110,11 @@ def read_users_me(access_token: str = Cookie(None)):
 
 @router.post("/logout")
 def logout(response: Response):
-    response.delete_cookie("access_token")
-    return {"message": "Logged out"}
+    response.delete_cookie(
+        key="access_token",
+        path="/"
+    )
+
 
 
 def get_current_user(access_token: str = Cookie(None)):

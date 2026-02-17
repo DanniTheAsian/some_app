@@ -31,20 +31,9 @@ def create_post(data: PostCreate, current_user=Depends(get_current_user)):
 
 
 @router.get("/")
-def get_posts():
-    posts = Post.get_all()
+def get_posts(current_user=Depends(get_current_user)):
+    return Post.get_all(current_user.id)
 
-    return [
-        {
-            "id": p[0],
-            "user_id": p[1],
-            "title": p[2],
-            "content": p[3],
-            "created_at": p[4],
-            "username": p[5]   # 🔥 her
-        }
-        for p in posts
-    ]
 
 @router.get("/{post_id}")
 def get_post(post_id: int):
