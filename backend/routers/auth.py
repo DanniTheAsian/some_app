@@ -1,4 +1,5 @@
-from fastapi import APIRouter, HTTPException, Response, Cookie
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel
 from jose import jwt, JWTError
 from datetime import datetime, timedelta
@@ -18,6 +19,8 @@ user_model = UserRepository()
 SECRET_KEY = os.getenv("SECRETKEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRES_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRES_MINUTES", 60))
+
+security = HTTPBearer()
 
 
 def create_access_token(data: dict):
@@ -44,7 +47,7 @@ class RegisterData(BaseModel):
 
 
 @router.post("/login")
-def login(data: LoginData, response: Response):
+def login(data: LoginData):
 
     ident = data.identifier or data.email
 
@@ -57,20 +60,14 @@ def login(data: LoginData, response: Response):
         user = user_model.get_by_username(ident)
 
     if user and user_model.verify_password(user, data.password):
-        access_token = create_access_token(data={"sub": str(user.id)})
 
-        response.set_cookie(
-            key="access_token",
-            value=access_token,
-            httponly=True,
-            secure=True,
-            samesite="none",
-            path="/",
-            max_age=60*60*24*7
+        access_token = create_access_token(
+            data={"sub": str(user.id)}
         )
 
-
-        return {"message": "Login success"}
+        return {
+            "access_token": access_token
+        }
 
     raise HTTPException(status_code=401, detail="Wrong credentials")
 
@@ -89,13 +86,15 @@ def register(data: RegisterData):
 
 
 @router.get("/me")
-def read_users_me(access_token: str = Cookie(None)):
-    if not access_token:
-        raise HTTPException(status_code=401)
+def read_users_me(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    token = credentials.credentials
 
     try:
-        payload = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("sub")
+
         user = user_model.get_by_id(user_id)
 
         return {
@@ -109,24 +108,25 @@ def read_users_me(access_token: str = Cookie(None)):
 
 
 @router.post("/logout")
-def logout(response: Response):
-    response.delete_cookie(
-        key="access_token",
-        path="/"
-    )
+def logout():
+    return {"message": "Logged out"}
 
 
 
-def get_current_user(access_token: str = Cookie(None)):
-    if not access_token:
-        raise HTTPException(status_code=401)
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    token = credentials.credentials
 
     try:
-        payload = jwt.decode(access_token, SECRET_KEY, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id = payload.get("sub")
+
         user = user_model.get_by_id(user_id)
+
         if not user:
             raise HTTPException(status_code=401)
+
         return user
 
     except JWTError:

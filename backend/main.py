@@ -6,6 +6,11 @@ from routers import auth, posts, likes, comments
 app = FastAPI()
 
 app.add_middleware(
+    ProxyHeadersMiddleware,
+    trusted_hosts="*"
+)
+
+app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:3000",
@@ -17,10 +22,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.add_middleware(
-    ProxyHeadersMiddleware,
-    trusted_hosts="*"
-)
 app.include_router(auth.router)
 app.include_router(posts.router)
 app.include_router(likes.router)
